@@ -2,7 +2,7 @@ import '../../domain/entities/ble_message.dart';
 
 class ChatState {
   final List<BleMessage> messages;
-  final bool isReady; // Vrai quand les services/caractéristiques sont trouvés
+  final bool isReady; 
   final String? error;
 
   ChatState({this.messages = const [], this.isReady = false, this.error});

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart'; // On reste sur Serial pour ton ESP32
+import 'package:lottie/lottie.dart';
 import './../../../../main.dart';
 import '../bloc/bluetooth_bloc.dart';
 import '../bloc/bluetooth_state.dart';
@@ -15,6 +16,21 @@ class BluetoothConnectionPage extends StatefulWidget {
 }
 
 class _BluetoothConnectionPageState extends State<BluetoothConnectionPage> {
+  bool _isManualScanning = false;
+
+  // Fonction pour simuler le scan avec l'animation
+  void _handleManualScan() async {
+    setState(() => _isManualScanning = true);
+
+    // On attend 2 secondes pour laisser l'animation Lottie s'exprimer
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (mounted) {
+      context.read<BluetoothBloc>().add(StartScanEvent());
+      setState(() => _isManualScanning = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -29,14 +45,11 @@ class _BluetoothConnectionPageState extends State<BluetoothConnectionPage> {
         actions: [
           IconButton(
             icon: Icon(
-              themeNotifier.value == ThemeMode.dark
-                  ? Icons.light_mode
-                  : Icons.dark_mode,
+              isDark ? Icons.light_mode : Icons.dark_mode,
               color: primaryColor,
             ),
-            onPressed: () {
-              themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
-            },
+            onPressed: () =>
+                themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark,
           ),
         ],
       ),
@@ -78,7 +91,7 @@ class _BluetoothConnectionPageState extends State<BluetoothConnectionPage> {
                           letterSpacing: 1.2,
                         ),
                       ),
-                      if (state is ScanningState)
+                      if (state is ScanningState || _isManualScanning)
                         SizedBox(
                           width: 14,
                           height: 14,
@@ -100,33 +113,7 @@ class _BluetoothConnectionPageState extends State<BluetoothConnectionPage> {
         },
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: Container(
-        height: 56,
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        width: double.infinity,
-        child: ElevatedButton(
-          onPressed: () => context.read<BluetoothBloc>().add(StartScanEvent()),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primaryColor,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.radar_rounded),
-              SizedBox(width: 12),
-              Text(
-                "Lancer le scan",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-        ),
-      ),
+      floatingActionButton: _buildAnimatedScanButton(primaryColor),
     );
   }
 
@@ -135,31 +122,42 @@ class _BluetoothConnectionPageState extends State<BluetoothConnectionPage> {
     ThemeData theme,
     Color primary,
   ) {
-    List<ScanResult> results = (state is ScanningState) ? state.results : [];
-    final secondaryText = theme.brightness == Brightness.dark
-        ? Colors.white60
-        : Colors.black54;
-
-    if (results.isEmpty) {
+    // Si on est en train de "simuler" le scan ou si le Bloc scanne et que la liste est vide
+    if (_isManualScanning ||
+        (state is ScanningState && state.results.isEmpty)) {
       return SliverFillRemaining(
         hasScrollBody: false,
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.bluetooth_searching_rounded,
-                size: 64,
-                color: secondaryText.withOpacity(0.3),
+              Lottie.asset(
+                'assets/animations/Bluetooth.json', // Ton fichier Lottie
+                width: 200,
+                repeat: true,
               ),
               const SizedBox(height: 16),
-              Text(
-                state is ScanningState
-                    ? "Recherche en cours..."
-                    : "Appuyez sur scanner",
-                style: TextStyle(color: secondaryText, fontSize: 16),
+              const Text(
+                "Recherche de modules Hope...",
+                style: TextStyle(color: Colors.grey),
               ),
             ],
+          ),
+        ),
+      );
+    }
+
+    final devices = (state is ScanningState)
+        ? state.results
+        : <BluetoothDevice>[];
+
+    if (devices.isEmpty) {
+      return const SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Text(
+            "Aucun appareil trouvé",
+            style: TextStyle(color: Colors.grey),
           ),
         ),
       );
@@ -169,61 +167,71 @@ class _BluetoothConnectionPageState extends State<BluetoothConnectionPage> {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate((context, index) {
-          final result = results[index];
-          final name = result.advertisementData.advName.isNotEmpty
-              ? result.advertisementData.advName
-              : (result.device.platformName.isNotEmpty
-                    ? result.device.platformName
-                    : "Appareil inconnu");
-
+          final device = devices[index];
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
               color: theme.cardColor,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: primary.withOpacity(0.1)),
             ),
             child: ListTile(
-              leading: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(_getDeviceIcon(name), color: primary),
-              ),
+              leading: Icon(Icons.bluetooth, color: primary),
               title: Text(
-                name,
+                device.name ?? "Inconnu",
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              subtitle: Text(
-                result.device.remoteId.str,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: secondaryText,
-                  fontFamily: 'monospace',
-                ),
-              ),
-              trailing: Icon(Icons.link_rounded, color: primary),
+              subtitle: Text(device.address),
               onTap: () => context.read<BluetoothBloc>().add(
-                ConnectToDeviceEvent(result.device),
+                ConnectToDeviceEvent(device),
               ),
             ),
           );
-        }, childCount: results.length),
+        }, childCount: devices.length),
       ),
     );
   }
 
-  IconData _getDeviceIcon(String name) {
-    final n = name.toLowerCase();
-    if (n.contains("esp32") || n.contains("hope")) return Icons.memory_rounded;
-    return Icons.bluetooth_rounded;
+  Widget _buildAnimatedScanButton(Color primary) {
+    return Container(
+      height: 56,
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _isManualScanning ? null : _handleManualScan,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: _isManualScanning
+            ? const SizedBox(
+                height: 24,
+                width: 24,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.radar_rounded),
+                  SizedBox(width: 12),
+                  Text(
+                    "Lancer le scan",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+      ),
+    );
   }
 
   Widget _buildStatusCard(ThemeData theme, Color primary, bool isDark) {
     return Container(
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(24),
@@ -235,65 +243,25 @@ class _BluetoothConnectionPageState extends State<BluetoothConnectionPage> {
           ),
         ],
       ),
-      child: Column(
+      child: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: primary.withOpacity(0.1),
-                  child: Icon(Icons.bluetooth_audio_rounded, color: primary),
-                ),
-                const SizedBox(width: 16),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Signal Radio",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        "Scan des modules Hope...",
-                        style: TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          CircleAvatar(
+            backgroundColor: primary.withOpacity(0.1),
+            child: Icon(Icons.bluetooth_audio_rounded, color: primary),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: BoxDecoration(
-              color: primary.withOpacity(0.05),
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(24),
+          const SizedBox(width: 16),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Signal Radio",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "Bluetooth",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-                StreamBuilder<BluetoothAdapterState>(
-                  stream: FlutterBluePlus.adapterState,
-                  builder: (context, snapshot) => Switch.adaptive(
-                    value: snapshot.data == BluetoothAdapterState.on,
-                    activeColor: primary,
-                    onChanged: (val) => context.read<BluetoothBloc>().add(
-                      ToggleBluetoothEvent(val),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              Text(
+                "Modules Hope ESP32",
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            ],
           ),
         ],
       ),

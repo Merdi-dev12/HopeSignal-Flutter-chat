@@ -1,11 +1,11 @@
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 
 abstract class BluetoothBlocState {}
 
 class BluetoothInitial extends BluetoothBlocState {}
 
 class ScanningState extends BluetoothBlocState {
-  final List<ScanResult> results;
+  final List<BluetoothDevice> results; // Liste des appareils appairés/détectés
   ScanningState(this.results);
 }
 

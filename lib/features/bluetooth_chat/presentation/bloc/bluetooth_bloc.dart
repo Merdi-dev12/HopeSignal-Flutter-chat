@@ -1,80 +1,70 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import '../../domain/repositories/ble_repository.dart'; 
 import 'bluetooth_event.dart';
 import 'bluetooth_state.dart';
 
 class BluetoothBloc extends Bloc<BluetoothEvent, BluetoothBlocState> {
-  StreamSubscription? _scanSubscription;
+  final FlutterBluetoothSerial _bluetooth = FlutterBluetoothSerial.instance;
+  final BleRepository
+  repository; 
 
-  BluetoothBloc() : super(BluetoothInitial()) {
-    // 1. Gérer le scan (Universel : ESP32, Phones, Audio, etc.)
+  BluetoothBloc({required this.repository}) : super(BluetoothInitial()) {
     on<StartScanEvent>((event, emit) async {
       emit(ScanningState(const []));
-
       try {
-        // On lance le scan avec les paramètres recommandés
-        await FlutterBluePlus.startScan(
-          timeout: const Duration(seconds: 15),
-          androidUsesFineLocation: true,
-        );
+        bool? isEnabled = await _bluetooth.isEnabled;
+        if (isEnabled != true) {
+          emit(BluetoothErrorState("Veuillez activer le Bluetooth"));
+          return;
+        }
 
-        _scanSubscription?.cancel();
-        _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
-          add(_UpdateScanResults(results));
-        });
+        
+        List<BluetoothDevice> bondedDevices = await _bluetooth
+            .getBondedDevices();
+
+        emit(ScanningState(bondedDevices));
       } catch (e) {
-        emit(BluetoothErrorState("Erreur de scan: $e"));
+        emit(
+          BluetoothErrorState(
+            "Erreur lors de la récupération des appareils: $e",
+          ),
+        );
       }
     });
 
-    // Événement interne pour mettre à jour la liste en temps réel
-    on<_UpdateScanResults>((event, emit) {
-      emit(ScanningState(event.results));
-    });
-
-    // 2. Gérer la connexion (CORRECTION DÉFINITIVE DE LA LICENCE)
     on<ConnectToDeviceEvent>((event, emit) async {
       emit(ConnectingState(event.device));
-
       try {
-        await FlutterBluePlus.stopScan();
-
-        // On utilise License.values.first pour satisfaire l'argument requis
-        // sans risquer une erreur "Undefined name" ou "No constant named"
-        await event.device.connect(
-          autoConnect: false,
-          license: License.values.first, // <--- La clé du succès
-          timeout: const Duration(seconds: 35),
-        );
+        await repository.connect(event.device.address);
 
         emit(ConnectedState(event.device));
       } catch (e) {
-        emit(BluetoothErrorState("Échec de connexion: $e"));
+        emit(
+          BluetoothErrorState(
+            "Échec de connexion à ${event.device.name}. Vérifiez qu'il est bien appairé.",
+          ),
+        );
       }
     });
 
-    // 3. Activer/Désactiver Bluetooth (Android seulement)
     on<ToggleBluetoothEvent>((event, emit) async {
-      if (event.enable) {
-        try {
-          await FlutterBluePlus.turnOn();
-        } catch (_) {
-          // Sur iOS ou certaines versions Android, cela peut échouer silencieusement
+      try {
+        if (event.enable) {
+          await _bluetooth.requestEnable();
+        } else {
+          await _bluetooth.requestDisable();
         }
+        add(StartScanEvent());
+      } catch (e) {
+        emit(BluetoothErrorState("Impossible de changer l'état Bluetooth"));
       }
     });
-  }
 
-  @override
-  Future<void> close() {
-    _scanSubscription?.cancel();
-    return super.close();
+    on<StopScanEvent>((event, emit) async {
+      await repository.disconnect();
+      emit(BluetoothInitial());
+    });
   }
-}
-
-// Classe privée pour la mise à jour fluide des résultats
-class _UpdateScanResults extends BluetoothEvent {
-  final List<ScanResult> results;
-  _UpdateScanResults(this.results);
 }
