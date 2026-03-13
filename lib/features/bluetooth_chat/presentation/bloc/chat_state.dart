@@ -1,4 +1,5 @@
 import '../../domain/entities/ble_message.dart';
+import '../../data/models/chat_message.dart';
 
 class ChatState {
   final List<BleMessage> messages;
@@ -19,3 +20,5 @@ class ChatState {
     );
   }
 }
+
+

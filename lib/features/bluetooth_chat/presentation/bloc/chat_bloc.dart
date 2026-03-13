@@ -10,9 +10,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription? _messageSubscription;
 
   ChatBloc(this.repository) : super(ChatState()) {
+    // 1. Initialisation du Chat et écoute du flux Bluetooth
     on<InitChatEvent>((event, emit) {
       _messageSubscription?.cancel();
       _messageSubscription = repository.messagesStream.listen((messages) {
+        // Si le repository renvoie une liste, on ajoute chaque message au flux du Bloc
         for (var msg in messages) {
           add(OnMessageReceivedEvent(msg));
         }
@@ -20,9 +22,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(state.copyWith(isReady: true));
     });
 
+    // 2. Envoi d'un message TEXTE (Bluetooth + UI)
     on<SendTextMessageEvent>((event, emit) async {
       if (event.text.isNotEmpty) {
         try {
+          // Envoi réel via le repository (Bluetooth/ESP32)
           await repository.sendMessage(event.text);
 
           final myMsg = BleMessage(
@@ -30,8 +34,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             text: event.text,
             timestamp: DateTime.now(),
             isFromMe: true,
+            type: MessageType.text,
           );
 
+          // Mise à jour de l'UI
           emit(state.copyWith(messages: [myMsg, ...state.messages]));
         } catch (e) {
           emit(state.copyWith(error: "Échec de l'envoi : $e"));
@@ -39,6 +45,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     });
 
+    // 3. Envoi d'un message AUDIO (Local uniquement pour l'instant)
+    on<SendAudioMessageEvent>((event, emit) async {
+      final audioMsg = BleMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        text: event.path, // Le chemin local du fichier .m4a
+        timestamp: DateTime.now(),
+        isFromMe: true,
+        type: MessageType.audio,
+      );
+
+      // On l'ajoute juste à l'interface (invisible pour l'ESP32)
+      emit(state.copyWith(messages: [audioMsg, ...state.messages]));
+    });
+
+    // 4. Réception d'un nouveau message (depuis le stream)
     on<OnMessageReceivedEvent>((event, emit) {
       emit(state.copyWith(messages: [event.message, ...state.messages]));
     });

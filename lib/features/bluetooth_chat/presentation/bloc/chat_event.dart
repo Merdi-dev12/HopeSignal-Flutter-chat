@@ -13,3 +13,8 @@ class OnMessageReceivedEvent extends ChatEvent {
   final BleMessage message;
   OnMessageReceivedEvent(this.message);
 }
+
+class SendAudioMessageEvent extends ChatEvent {
+  final String path;
+  SendAudioMessageEvent(this.path);
+}

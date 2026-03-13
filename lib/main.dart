@@ -10,11 +10,13 @@ import 'features/bluetooth_chat/presentation/bloc/chat_bloc.dart';
 import 'features/bluetooth_chat/presentation/pages/connection_page.dart';
 import 'features/bluetooth_chat/presentation/pages/chat_page.dart';
 import 'features/bluetooth_chat/presentation/pages/splash_page.dart';
+
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // On demande TOUTES les permissions (BT + Micro) au démarrage
   await PermissionService.requestBluetoothPermissions();
 
   final dataSource = BluetoothClassicDataSource();
@@ -48,7 +50,6 @@ class HopeSignalApp extends StatelessWidget {
               title: 'Hope Signal',
               debugShowCheckedModeBanner: false,
               themeMode: currentMode,
-
               theme: ThemeData(
                 brightness: Brightness.light,
                 primaryColor: const Color(0xFF007AFF),
@@ -61,7 +62,6 @@ class HopeSignalApp extends StatelessWidget {
                 ),
                 textTheme: GoogleFonts.plusJakartaSansTextTheme(),
               ),
-
               darkTheme: ThemeData(
                 brightness: Brightness.dark,
                 primaryColor: const Color(0xFF007AFF),
@@ -77,7 +77,6 @@ class HopeSignalApp extends StatelessWidget {
                   ThemeData.dark().textTheme,
                 ),
               ),
-
               initialRoute: '/splash',
               routes: {
                 '/splash': (context) => const SplashPage(),

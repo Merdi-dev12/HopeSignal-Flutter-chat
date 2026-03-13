@@ -6,6 +6,7 @@ class PermissionService {
       Permission.bluetoothScan,
       Permission.bluetoothConnect,
       Permission.bluetoothAdvertise,
+      Permission.microphone, 
       Permission.location, 
     ].request();
 
